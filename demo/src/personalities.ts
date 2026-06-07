@@ -199,4 +199,47 @@ const jitter: Personality = {
   frameScale: frame => (Math.floor(frame / 90) % 2 === 0 ? 0.85 : 6),
 }
 
-export const personalities: Personality[] = [space, city, server, jitter]
+// Uncapped: target interval (1ms) is always below the frame's work, so the
+// scheduler's max(prev + interval, prevEnd) is permanently work-bound —
+// frames run back-to-back like a game with vsync off, wobbling around
+// 250-450fps with the workload. Per-frame rates (gc, hitches) are tuned for
+// the ~300fps effective cadence.
+const bench: Personality = {
+  key: 'bench',
+  appName: 'Furnace',
+  fps: 1000,
+  targetFps: 240,
+  main: {
+    tid: 1,
+    name: 'Main',
+    zones: [
+      {
+        name: 'Frame',
+        base: 0.1,
+        children: [
+          { name: 'Update', base: 1.4, jitter: 0.5 },
+          { name: 'Particles', base: 0.8, jitter: 0.7 },
+        ],
+      },
+    ],
+  },
+  render: {
+    tid: 2,
+    name: 'Render',
+    zones: [
+      {
+        name: 'RenderFrame',
+        base: 0.1,
+        children: [{ name: 'Draw', base: 1.1, jitter: 0.4 }],
+      },
+    ],
+  },
+  counters: [
+    { name: 'spriteBatches', next: makeWander(340, 14, 100, 900) },
+    { name: 'tris', next: makeBursty(450_000, 900_000, 0.004, 0.95) },
+  ],
+  hitches: [{ name: 'ShaderCompile', marker: true, meanIntervalMs: 18_000, durationMs: [12, 35] }],
+  gc: { limitMb: 384, floorMb: 140, ratePerSec: 90, pauseMs: [4, 14] },
+}
+
+export const personalities: Personality[] = [space, city, server, jitter, bench]

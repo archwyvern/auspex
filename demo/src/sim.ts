@@ -40,6 +40,9 @@ export type Personality = {
   key: string
   appName: string
   fps: number
+  // Declared in the hello as the app's target; defaults to the pacing fps.
+  // Uncapped personalities (pacing fps far above reality) declare a sane one.
+  targetFps?: number
   main: ThreadSpec
   render?: ThreadSpec // pipelined: services frame N right after main finishes it
   jobs?: ThreadSpec[]

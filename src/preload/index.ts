@@ -32,6 +32,17 @@ const api = {
     ipcRenderer.on('auspex:session', listener)
     return () => ipcRenderer.off('auspex:session', listener)
   },
+  runDemo(): void {
+    ipcRenderer.send('auspex:demo-run')
+  },
+  stopDemo(): void {
+    ipcRenderer.send('auspex:demo-stop')
+  },
+  onDemoState(callback: (state: { running: boolean }) => void): () => void {
+    const listener = (_event: IpcRendererEvent, state: { running: boolean }) => callback(state)
+    ipcRenderer.on('auspex:demo-state', listener)
+    return () => ipcRenderer.off('auspex:demo-state', listener)
+  },
 }
 
 contextBridge.exposeInMainWorld('auspex', api)

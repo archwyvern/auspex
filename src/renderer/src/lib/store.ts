@@ -1,12 +1,12 @@
 import type { Msg } from '../../../shared/protocol'
-import { FrameIndex, OPEN_END, Track } from './columns'
+import { CounterSeries, FrameIndex, OPEN_END, Track } from './columns'
 
 const MARKER_CAP = 1000
 const FM_WINDOW = 90
 const TICK_MS = 200
-const FRAME_SAMPLE_CAP = 240
 const MAX_TRACK_ROWS = 1 << 21
 const MAX_FRAME_ROWS = 1 << 20
+const MAX_COUNTER_ROWS = 1 << 17
 const SNAPSHOT_FRAMES = 60
 const SNAPSHOT_CAP = 900
 const SNAPSHOT_ZONE_CAP = 40
@@ -20,6 +20,19 @@ export type ZoneStat = {
   maxUs: number
 }
 
+// One bar of the average-frame picture: a zone identity (thread, depth, name)
+// with its mean position and duration within the frame, and how often it
+// occurs per frame (ghosting for occasional zones).
+export type FrameShapeZone = {
+  tid: number
+  depth: number
+  nameId: number
+  name: string
+  avgOffsetUs: number
+  avgDurUs: number
+  perFrame: number
+}
+
 export type Snapshot = {
   seq: number
   startUs: number
@@ -28,7 +41,10 @@ export type Snapshot = {
   fps: number
   frameAvgUs: number
   frameMaxUs: number
+  // Budget captured at snapshot time so a frozen AVG view is fully static.
+  budgetUs: number
   zones: ZoneStat[]
+  shape: FrameShapeZone[]
 }
 
 export type ThreadInfo = {
@@ -43,6 +59,13 @@ export type MarkerEntry = {
   name: string
 }
 
+export type CounterInfo = {
+  nameId: number
+  name: string
+  latest: number
+  series: CounterSeries
+}
+
 export type Session = {
   id: number
   status: 'handshaking' | 'live' | 'closed'
@@ -52,7 +75,7 @@ export type Session = {
   tsFreq: number
   strings: Map<number, string>
   threads: Map<number, ThreadInfo>
-  counters: Map<string, number>
+  counters: Map<number, CounterInfo>
   markers: MarkerEntry[]
   tracks: Map<number, Track>
   frames: FrameIndex
@@ -70,7 +93,6 @@ export type Session = {
   carry: string
   mainTid: number | null
   fmTimes: number[]
-  frameSamples: number[]
   lastEvents: number
   aggCursors: Map<number, number>
   snapshotFrameRow: number
@@ -86,6 +108,7 @@ class SessionStore {
   readonly sessions = new Map<number, Session>()
   readonly order: number[] = []
   serverState: AuspexServerState = { listening: false, host: '', port: 0, error: null }
+  demoRunning = false
   version = 0
 
   private readonly listeners = new Set<() => void>()
@@ -100,6 +123,10 @@ class SessionStore {
     window.auspex.onServerState(state => {
       this.serverState = state
       this.markDirty()
+    })
+    window.auspex.onDemoState(state => {
+      this.demoRunning = state.running
+      this.notify()
     })
     window.auspex.onSessionEvent(event => {
       if (event.type === 'open') this.open(event.id)
@@ -153,7 +180,6 @@ class SessionStore {
       carry: '',
       mainTid: null,
       fmTimes: [],
-      frameSamples: [],
       lastEvents: 0,
       aggCursors: new Map(),
       snapshotFrameRow: 0,
@@ -208,6 +234,9 @@ class SessionStore {
         session.pid = msg.pid
         session.startMs = msg.start
         session.tsFreq = msg.tsFreq
+        // The budget is a declared contract, not an estimate: the producer's
+        // target fps, defaulting to 60. Static by construction.
+        session.budgetUs = 1_000_000 / (msg.fps && msg.fps > 0 ? msg.fps : 60)
         if (session.status === 'handshaking') session.status = 'live'
         break
       case 'str':
@@ -222,17 +251,15 @@ class SessionStore {
         break
       case 'fm':
         if (session.mainTid === null) session.mainTid = msg.tid
+        this.track(session, msg.tid).markFrame(msg.ts)
         if (msg.tid === session.mainTid) {
+          for (const [tid, track] of session.tracks) {
+            if (tid !== msg.tid) track.adoptFrame(msg.ts)
+          }
           session.framesTotal = Math.max(session.framesTotal, msg.frame + 1)
           session.fmTimes.push(msg.ts)
           if (session.fmTimes.length > FM_WINDOW) session.fmTimes.shift()
-          const frames = session.frames
-          if (frames.length > frames.firstRow) {
-            const duration = msg.ts - frames.start.get(frames.length - 1)
-            session.frameSamples.push(duration)
-            if (session.frameSamples.length > FRAME_SAMPLE_CAP) session.frameSamples.shift()
-          }
-          frames.push(msg.ts, msg.frame)
+          session.frames.push(msg.ts, msg.frame)
         }
         this.bumpThread(session, msg.tid)
         this.bumpTime(session, msg.ts)
@@ -248,10 +275,22 @@ class SessionStore {
         this.bumpThread(session, msg.tid)
         this.bumpTime(session, msg.ts)
         break
-      case 'ctr':
-        session.counters.set(session.strings.get(msg.name) ?? `#${msg.name}`, msg.value)
+      case 'ctr': {
+        let counter = session.counters.get(msg.name)
+        if (!counter) {
+          counter = {
+            nameId: msg.name,
+            name: session.strings.get(msg.name) ?? `#${msg.name}`,
+            latest: msg.value,
+            series: new CounterSeries(),
+          }
+          session.counters.set(msg.name, counter)
+        }
+        counter.latest = msg.value
+        counter.series.push(msg.ts, msg.value)
         this.bumpTime(session, msg.ts)
         break
+      }
       case 'mk':
         session.markers.push({
           tsUs: msg.ts,
@@ -285,16 +324,9 @@ class SessionStore {
         const spanSec = (last - first) / session.tsFreq
         session.fps = spanSec > 0 ? (times.length - 1) / spanSec : 0
       }
-      if (session.frameSamples.length >= 8) {
-        // p25 rather than median: a bimodal app (alternating healthy/blown
-        // phases) flips its median between modes as the window shifts, which
-        // would invert the frame-bar colors. p25 stays pinned to the healthy
-        // mode as long as at least a quarter of recent frames are healthy.
-        const sorted = [...session.frameSamples].sort((a, b) => a - b)
-        session.budgetUs = sorted[sorted.length >> 2]
-      }
       this.maybeSnapshot(session)
       for (const track of session.tracks.values()) track.trim(MAX_TRACK_ROWS)
+      for (const counter of session.counters.values()) counter.series.trim(MAX_COUNTER_ROWS)
       session.frames.trim(MAX_FRAME_ROWS)
       if (session.status === 'live') this.dirty = true
     }
@@ -321,6 +353,7 @@ class SessionStore {
         if (duration > frameMax) frameMax = duration
       }
 
+      const { zones, shape } = this.aggregateZones(session, endUs, SNAPSHOT_FRAMES)
       session.snapshots.push({
         seq: session.snapshotSeq++,
         startUs,
@@ -329,7 +362,9 @@ class SessionStore {
         fps: (SNAPSHOT_FRAMES * 1_000_000) / (endUs - startUs),
         frameAvgUs: frameTotal / SNAPSHOT_FRAMES,
         frameMaxUs: frameMax,
-        zones: this.aggregateZones(session, endUs),
+        budgetUs: session.budgetUs,
+        zones,
+        shape,
       })
       if (session.snapshots.length > SNAPSHOT_CAP) session.snapshots.shift()
       this.dirty = true
@@ -338,10 +373,16 @@ class SessionStore {
 
   // Walks each track's rows from its aggregation cursor up to windowEndUs,
   // reconstructing nesting from begin-order + known ends to attribute
-  // self-time (zone minus children). A still-open zone stalls that track's
-  // cursor; its rows fold into a later snapshot once it closes. Zones are
-  // attributed to the window where they began.
-  private aggregateZones(session: Session, windowEndUs: number): ZoneStat[] {
+  // self-time (zone minus children), and accumulating the average-frame
+  // shape (mean in-frame offset and duration per zone identity). A
+  // still-open zone stalls that track's cursor; its rows fold into a later
+  // snapshot once it closes. Zones are attributed to the window where they
+  // began.
+  private aggregateZones(
+    session: Session,
+    windowEndUs: number,
+    frameCount: number,
+  ): { zones: ZoneStat[]; shape: FrameShapeZone[] } {
     const stats = new Map<number, ZoneStat>()
     const record = (nameId: number, durationUs: number, selfUs: number) => {
       let stat = stats.get(nameId)
@@ -362,6 +403,9 @@ class SessionStore {
       if (durationUs > stat.maxUs) stat.maxUs = durationUs
     }
 
+    type ShapeAcc = { tid: number; depth: number; nameId: number; sumOffset: number; sumDur: number; count: number }
+    const shapeAcc = new Map<string, ShapeAcc>()
+
     for (const [tid, track] of session.tracks) {
       let row = session.aggCursors.get(tid) ?? track.firstRow
       if (row < track.firstRow) row = track.firstRow
@@ -376,14 +420,43 @@ class SessionStore {
         if (start >= windowEndUs) break
         const end = track.end.get(row)
         if (end === OPEN_END) break
+        const nameId = track.name.get(row)
         while (stack.length > 0 && stack[stack.length - 1].endUs <= start) pop()
-        stack.push({ endUs: end, nameId: track.name.get(row), durationUs: end - start, childUs: 0 })
+        stack.push({ endUs: end, nameId, durationUs: end - start, childUs: 0 })
+
+        const offset = track.offset.get(row)
+        if (offset >= 0) {
+          const depth = track.depth.get(row)
+          const key = `${tid}:${depth}:${nameId}`
+          let acc = shapeAcc.get(key)
+          if (!acc) {
+            acc = { tid, depth, nameId, sumOffset: 0, sumDur: 0, count: 0 }
+            shapeAcc.set(key, acc)
+          }
+          acc.sumOffset += offset
+          acc.sumDur += end - start
+          acc.count++
+        }
       }
       while (stack.length > 0) pop()
       session.aggCursors.set(tid, row)
     }
 
-    return [...stats.values()].sort((a, b) => b.selfUs - a.selfUs).slice(0, SNAPSHOT_ZONE_CAP)
+    const shape = [...shapeAcc.values()].map(acc => ({
+      tid: acc.tid,
+      depth: acc.depth,
+      nameId: acc.nameId,
+      name: session.strings.get(acc.nameId) ?? `#${acc.nameId}`,
+      avgOffsetUs: acc.sumOffset / acc.count,
+      avgDurUs: acc.sumDur / acc.count,
+      perFrame: acc.count / frameCount,
+    }))
+    shape.sort((a, b) => a.tid - b.tid || a.depth - b.depth || a.avgOffsetUs - b.avgOffsetUs)
+
+    return {
+      zones: [...stats.values()].sort((a, b) => b.selfUs - a.selfUs).slice(0, SNAPSHOT_ZONE_CAP),
+      shape,
+    }
   }
 
   private markDirty(): void {
@@ -398,3 +471,6 @@ class SessionStore {
 }
 
 export const store = new SessionStore()
+
+// Debug handle for devtools/CDP poking; this is a dev tool, no secrets here.
+;(window as unknown as { __auspex: SessionStore }).__auspex = store

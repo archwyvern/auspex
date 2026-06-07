@@ -80,6 +80,7 @@ export class Producer {
       name: p.appName,
       start: this.sessionStartMs,
       tsFreq: 1_000_000,
+      fps: p.targetFps ?? p.fps,
     })
     for (const thread of [p.main, p.render, ...(p.jobs ?? [])]) {
       if (thread) this.batch.push({ t: 'thread', tid: thread.tid, name: this.strings.id(thread.name) })

@@ -15,6 +15,9 @@ export type HelloMsg = {
   name: string
   start: number // wall-clock epoch ms of session start
   tsFreq: number // timestamp ticks per second
+  // Declared target frame rate; drives the frame budget (gold line, frame-bar
+  // colors, axis scaling). Viewer defaults to 60 when absent.
+  fps?: number
 }
 
 export type StringMsg = { t: 'str'; id: number; s: string }

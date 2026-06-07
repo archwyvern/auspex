@@ -17,6 +17,24 @@ export default function App() {
     }
   }, [])
 
+  // ctrl+arrows cycle session tabs.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (!event.ctrlKey || (event.code !== 'ArrowLeft' && event.code !== 'ArrowRight')) return
+      event.preventDefault()
+      const delta = event.code === 'ArrowLeft' ? -1 : 1
+      setActiveId(prev => {
+        const order = store.order
+        if (order.length === 0) return prev
+        const index = prev !== null ? order.indexOf(prev) : -1
+        const base = index < 0 ? order.length - 1 : index
+        return order[(base + delta + order.length) % order.length]
+      })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
+
   const sessions = store.order
     .map(id => store.sessions.get(id))
     .filter((session): session is NonNullable<typeof session> => session !== undefined)
@@ -28,7 +46,7 @@ export default function App() {
     <div className="flex h-full flex-col">
       <header className="flex h-10 shrink-0 items-stretch border-b border-hairline bg-panel-bright">
         <div className="flex items-center gap-2 border-r border-hairline px-3">
-          <span className="text-sm tracking-[0.25em] text-ember">AUSPEX</span>
+          <span className="font-display text-sm font-semibold tracking-[0.25em] text-ember">AUSPEX</span>
         </div>
         <TabStrip
           sessions={sessions}
@@ -39,10 +57,18 @@ export default function App() {
       </header>
 
       <main className="min-h-0 flex-1">
-        {active ? <SessionView session={active} /> : <EmptyState state={store.serverState} />}
+        {active ? (
+          <SessionView session={active} />
+        ) : (
+          <EmptyState state={store.serverState} demoRunning={store.demoRunning} />
+        )}
       </main>
 
-      <StatusBar state={store.serverState} sessionCount={sessions.length} />
+      <StatusBar
+        state={store.serverState}
+        sessionCount={sessions.length}
+        demoRunning={store.demoRunning}
+      />
     </div>
   )
 }

@@ -1,10 +1,10 @@
 import { PulseRegular } from '@fluentui/react-icons'
 
-export function EmptyState({ state }: { state: AuspexServerState }) {
+export function EmptyState({ state, demoRunning }: { state: AuspexServerState; demoRunning: boolean }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4">
       <PulseRegular className="text-7xl text-ember" />
-      <div className="text-2xl tracking-[0.3em] text-neutral-50">AUSPEX</div>
+      <div className="font-display text-2xl font-semibold tracking-[0.3em] text-neutral-50">AUSPEX</div>
       <div className="text-sm text-neutral-300">
         {state.listening ? (
           <>
@@ -20,8 +20,15 @@ export function EmptyState({ state }: { state: AuspexServerState }) {
           'starting listener...'
         )}
       </div>
-      <div className="rounded-[3px] border border-hairline bg-panel px-3 py-1.5 text-sm text-neutral-300">
-        try: <span className="text-ember select-text">pnpm demo</span>
+      <button
+        onClick={() => (demoRunning ? window.auspex.stopDemo() : window.auspex.runDemo())}
+        disabled={!state.listening}
+        className="rounded-[3px] border border-ember/40 px-4 py-2 text-sm text-ember transition-colors hover:bg-ember/10 disabled:opacity-50"
+      >
+        {demoRunning ? 'demo starting...' : 'run demo producers'}
+      </button>
+      <div className="text-sm text-neutral-300">
+        or from a terminal: <span className="text-neutral-50 select-text">pnpm demo</span>
       </div>
     </div>
   )

@@ -22,6 +22,9 @@ declare global {
       ready: () => void
       onServerState: (callback: (state: AuspexServerState) => void) => () => void
       onSessionEvent: (callback: (event: AuspexSessionEvent) => void) => () => void
+      runDemo: () => void
+      stopDemo: () => void
+      onDemoState: (callback: (state: { running: boolean }) => void) => () => void
     }
   }
 }

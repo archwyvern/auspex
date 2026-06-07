@@ -60,6 +60,25 @@ export function zoneColor(nameId: number): string {
   return color
 }
 
+// Brighter variant of the same hue for counter plot lines, which are 1-2px
+// strokes and need more luminance than zone fills to read.
+const lineCache = new Map<number, string>()
+
+export function counterColor(nameId: number): string {
+  let color = lineCache.get(nameId)
+  if (!color) {
+    const hue = (nameId * 137.508) % 360
+    color = `hsl(${hue.toFixed(1)} 60% 58%)`
+    lineCache.set(nameId, color)
+  }
+  return color
+}
+
+export function formatCounterValue(value: number): string {
+  if (Number.isInteger(value)) return value.toLocaleString('en-GB')
+  return value.toFixed(1)
+}
+
 export function formatDuration(us: number): string {
   if (us >= 1_000_000) return `${(us / 1_000_000).toFixed(2)}s`
   if (us >= 1_000) return `${(us / 1_000).toFixed(2)}ms`
@@ -75,6 +94,16 @@ export function formatTick(us: number, stepUs: number): string {
     return `${(us / 1_000_000).toFixed(decimals)}s`
   }
   return `${(us / 1_000).toFixed(stepUs >= 100 ? 1 : 2)}ms`
+}
+
+// Smallest "nice" value >= input, used to quantize axis windows so the ruler
+// and budget line don't drift every time an average wobbles.
+export function niceCeil(value: number): number {
+  const magnitude = Math.pow(10, Math.floor(Math.log10(value)))
+  for (const m of [1, 1.5, 2, 2.5, 3, 4, 5, 7.5, 10]) {
+    if (magnitude * m >= value) return magnitude * m
+  }
+  return magnitude * 10
 }
 
 // Nice tick step (1-2-5 ladder) targeting ~minPx pixels between ticks.

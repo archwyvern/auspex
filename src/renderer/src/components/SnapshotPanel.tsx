@@ -3,27 +3,27 @@ import { formatDuration } from '../lib/canvas'
 
 type SnapshotPanelProps = {
   snapshot: Snapshot | null
-  pinned: boolean
+  frozen?: boolean
 }
 
-// Per-zone stats for one aggregation window. Sorted by total self-time: the
-// honest "where the time actually went" ordering — parents don't absorb
-// credit for their children.
-export function SnapshotPanel({ snapshot, pinned }: SnapshotPanelProps) {
+// Per-zone stats for the latest aggregation window. Sorted by total
+// self-time: the honest "where the time actually went" ordering — parents
+// don't absorb credit for their children.
+export function SnapshotPanel({ snapshot, frozen = false }: SnapshotPanelProps) {
   const windowUs = snapshot ? snapshot.endUs - snapshot.startUs : 0
 
   return (
-    <div className="flex min-h-0 flex-col rounded-[3px] border border-hairline bg-panel">
+    <div className="flex min-h-0 flex-1 flex-col rounded-[3px] border border-hairline bg-panel">
       <div className="flex items-baseline gap-3 border-b border-hairline px-3 py-1.5">
-        <div className="text-sm tracking-widest text-neutral-300 uppercase">zones</div>
+        <div className="font-display text-sm font-semibold tracking-widest text-neutral-300 uppercase">
+          zones
+        </div>
         {snapshot && (
           <>
             <span className="text-sm text-neutral-300">
-              {snapshot.frames} frames @ {(snapshot.startUs / 1_000_000).toFixed(1)}s
+              last {snapshot.frames} frames @ {(snapshot.startUs / 1_000_000).toFixed(1)}s
             </span>
-            <span className={`text-sm ${pinned ? 'text-ember' : 'text-emerald-400'}`}>
-              {pinned ? 'PINNED' : 'LIVE'}
-            </span>
+            {frozen && <span className="text-sm text-ember">PAUSED</span>}
           </>
         )}
       </div>

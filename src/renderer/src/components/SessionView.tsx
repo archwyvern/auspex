@@ -1,13 +1,16 @@
-import { useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import type { Session, Snapshot } from '../lib/store'
 import { formatInt, formatSessionSeconds, formatUptime } from '../lib/fmt'
 import { FrameBar } from './FrameBar'
 import { Timeline, type TimelineController } from './Timeline'
-import { SnapshotList } from './SnapshotList'
 import { SnapshotPanel } from './SnapshotPanel'
 
 function Label({ children }: { children: React.ReactNode }) {
-  return <div className="text-sm tracking-widest text-neutral-300 uppercase">{children}</div>
+  return (
+    <div className="font-display text-sm font-semibold tracking-widest text-neutral-300 uppercase">
+      {children}
+    </div>
+  )
 }
 
 function StatTile({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
@@ -19,9 +22,17 @@ function StatTile({ label, value, accent }: { label: string; value: string; acce
   )
 }
 
-function Panel({ title, children }: { title: string; children: React.ReactNode }) {
+function Panel({
+  title,
+  className = '',
+  children,
+}: {
+  title: string
+  className?: string
+  children: React.ReactNode
+}) {
   return (
-    <div className="flex min-h-0 flex-col rounded-[3px] border border-hairline bg-panel">
+    <div className={`flex min-h-0 flex-col rounded-[3px] border border-hairline bg-panel ${className}`}>
       <div className="border-b border-hairline px-3 py-1.5">
         <Label>{title}</Label>
       </div>
@@ -32,7 +43,31 @@ function Panel({ title, children }: { title: string; children: React.ReactNode }
 
 export function SessionView({ session }: { session: Session }) {
   const timelineController = useRef<TimelineController | null>(null)
-  const [pinnedSeq, setPinnedSeq] = useState<number | null>(null)
+  // Frozen AVG window: held here so the waterfall and the zones table
+  // freeze on the same snapshot together.
+  const [frozenAvg, setFrozenAvg] = useState<Snapshot | null>(null)
+
+  useEffect(() => setFrozenAvg(null), [session.id])
+
+  const toggleFreeze = useCallback(() => {
+    setFrozenAvg(prev => (prev ? null : (session.snapshots[session.snapshots.length - 1] ?? null)))
+  }, [session])
+
+  // Arrow stepping through snapshot history; stepping to/past the newest
+  // returns to live.
+  const stepSnapshot = useCallback(
+    (delta: number) => {
+      setFrozenAvg(prev => {
+        const snapshots = session.snapshots
+        if (snapshots.length === 0) return null
+        const currentIndex = prev ? snapshots.findIndex(s => s.seq === prev.seq) : snapshots.length - 1
+        const next = (currentIndex < 0 ? snapshots.length - 1 : currentIndex) + delta
+        if (next >= snapshots.length - 1) return null
+        return snapshots[Math.max(0, next)]
+      })
+    },
+    [session],
+  )
 
   const statusLabel =
     session.status === 'live' ? 'LIVE' : session.status === 'closed' ? 'DISCONNECTED' : 'HANDSHAKE'
@@ -43,22 +78,17 @@ export function SessionView({ session }: { session: Session }) {
         ? 'text-red-400 border-red-400/40'
         : 'text-ember border-ember/40'
 
-  const counters = [...session.counters.entries()].sort(([a], [b]) => a.localeCompare(b))
   const markers = [...session.markers].slice(-50).reverse()
-
-  const pinned = pinnedSeq !== null ? (session.snapshots.find(s => s.seq === pinnedSeq) ?? null) : null
-  const shownSnapshot = pinned ?? session.snapshots[session.snapshots.length - 1] ?? null
-
-  const selectSnapshot = (snapshot: Snapshot | null) => {
-    setPinnedSeq(snapshot?.seq ?? null)
-    if (snapshot) timelineController.current?.zoomTo(snapshot.startUs, snapshot.endUs)
-  }
+  const latestSnapshot = session.snapshots[session.snapshots.length - 1] ?? null
+  const shownSnapshot = frozenAvg ?? latestSnapshot
 
   return (
     <div className="flex h-full gap-2 p-2">
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex items-baseline gap-4 px-1">
-          <h1 className="text-xl text-neutral-50">{session.name ?? `session ${session.id}`}</h1>
+          <h1 className="font-display text-xl font-semibold text-neutral-50">
+            {session.name ?? `session ${session.id}`}
+          </h1>
           <span className="text-sm text-neutral-300">
             pid <span className="text-neutral-50 tabular-nums">{session.pid ?? '?'}</span>
           </span>
@@ -80,59 +110,52 @@ export function SessionView({ session }: { session: Session }) {
           </span>
         </div>
 
-        <div className="grid grid-cols-4 gap-2">
+        <FrameBar
+          key={`fb-${session.id}`}
+          session={session}
+          onSelectFrame={(startUs, endUs) => timelineController.current?.pinFrame(startUs, endUs)}
+        />
+
+        <Timeline
+          key={`tl-${session.id}`}
+          session={session}
+          controllerRef={timelineController}
+          snapshot={shownSnapshot}
+          frozen={frozenAvg !== null}
+          onToggleFreeze={toggleFreeze}
+          onStepSnapshot={stepSnapshot}
+        />
+      </div>
+
+      <aside className="flex w-[30rem] shrink-0 flex-col gap-2">
+        <div className="grid grid-cols-2 gap-2">
           <StatTile label="fps" value={session.fps.toFixed(1)} accent />
           <StatTile label="frames" value={formatInt(session.framesTotal)} />
           <StatTile label="events /s" value={formatInt(session.eventsRate)} />
           <StatTile label="zones" value={formatInt(session.zones)} />
         </div>
 
-        <FrameBar
-          key={`fb-${session.id}`}
-          session={session}
-          onSelectFrame={(startUs, endUs) => timelineController.current?.zoomTo(startUs, endUs)}
-        />
+        <SnapshotPanel snapshot={shownSnapshot} frozen={frozenAvg !== null} />
 
-        <Timeline key={`tl-${session.id}`} session={session} controllerRef={timelineController} />
-
-        <div className="grid h-44 shrink-0 grid-cols-[3fr_1fr_1fr] gap-2">
-          <SnapshotPanel snapshot={shownSnapshot} pinned={pinned !== null} />
-
-          <Panel title="counters">
+        <Panel title="markers" className="h-56 shrink-0">
+          {markers.length === 0 ? (
+            <div className="px-3 py-1.5 text-sm text-neutral-300">none yet</div>
+          ) : (
             <table className="w-full text-left text-sm">
               <tbody>
-                {counters.map(([name, value]) => (
-                  <tr key={name} className="border-b border-hairline last:border-b-0">
-                    <td className="px-3 py-1 text-neutral-50">{name}</td>
-                    <td className="px-3 py-1 text-right text-ember tabular-nums">{formatInt(value)}</td>
+                {markers.map((marker, index) => (
+                  <tr key={index} className="border-b border-hairline last:border-b-0">
+                    <td className="px-3 py-1 text-neutral-300 tabular-nums">
+                      {formatSessionSeconds(marker.tsUs, session.tsFreq)}
+                    </td>
+                    <td className="px-3 py-1 text-ember">{marker.name}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
-          </Panel>
-
-          <Panel title="markers">
-            {markers.length === 0 ? (
-              <div className="px-3 py-1.5 text-sm text-neutral-300">none yet</div>
-            ) : (
-              <table className="w-full text-left text-sm">
-                <tbody>
-                  {markers.map((marker, index) => (
-                    <tr key={index} className="border-b border-hairline last:border-b-0">
-                      <td className="px-3 py-1 text-neutral-300 tabular-nums">
-                        {formatSessionSeconds(marker.tsUs, session.tsFreq)}
-                      </td>
-                      <td className="px-3 py-1 text-ember">{marker.name}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </Panel>
-        </div>
-      </div>
-
-      <SnapshotList session={session} selectedSeq={pinnedSeq} onSelect={selectSnapshot} />
+          )}
+        </Panel>
+      </aside>
     </div>
   )
 }

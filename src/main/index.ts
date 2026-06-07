@@ -1,8 +1,10 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { join } from 'node:path'
 import { ProfilerServer } from './server'
+import { DemoRunner } from './demoRunner'
 
 const profilerServer = new ProfilerServer()
+const demoRunner = new DemoRunner()
 
 function createWindow(): void {
   const window = new BrowserWindow({
@@ -24,6 +26,7 @@ function createWindow(): void {
   })
 
   profilerServer.attach(window.webContents)
+  demoRunner.attach(window.webContents)
 
   if (!app.isPackaged && process.env['ELECTRON_RENDERER_URL']) {
     window.loadURL(process.env['ELECTRON_RENDERER_URL'])
@@ -33,12 +36,18 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
-  ipcMain.on('auspex:ready', () => profilerServer.onRendererReady())
+  ipcMain.on('auspex:ready', () => {
+    profilerServer.onRendererReady()
+    demoRunner.sendState()
+  })
+  ipcMain.on('auspex:demo-run', () => demoRunner.start())
+  ipcMain.on('auspex:demo-stop', () => demoRunner.stop())
   profilerServer.start()
   createWindow()
 })
 
 app.on('window-all-closed', () => {
+  demoRunner.stop()
   profilerServer.stop()
   app.quit()
 })
