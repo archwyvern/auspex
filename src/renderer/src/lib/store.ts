@@ -1,5 +1,6 @@
-import type { Msg } from '../../../shared/protocol'
+import type { ControlMsg } from '../../../shared/protocol'
 import { CounterSeries, FrameIndex, OPEN_END, Track } from './columns'
+import { WireParser } from './wire'
 
 const MARKER_CAP = 1000
 const FM_WINDOW = 90
@@ -89,8 +90,7 @@ export type Session = {
   fps: number
   parseErrors: number
   // internals
-  decoder: TextDecoder
-  carry: string
+  parser: WireParser
   mainTid: number | null
   fmTimes: number[]
   lastEvents: number
@@ -154,7 +154,7 @@ class SessionStore {
   }
 
   private open(id: number): void {
-    this.sessions.set(id, {
+    const session: Session = {
       id,
       status: 'handshaking',
       name: null,
@@ -176,15 +176,65 @@ class SessionStore {
       eventsRate: 0,
       fps: 0,
       parseErrors: 0,
-      decoder: new TextDecoder(),
-      carry: '',
+      parser: null as unknown as WireParser,
       mainTid: null,
       fmTimes: [],
       lastEvents: 0,
       aggCursors: new Map(),
       snapshotFrameRow: 0,
       snapshotSeq: 0,
+    }
+    session.parser = new WireParser({
+      control: msg => this.applyControl(session, msg),
+      zoneBegin: (tid, ts, nameId) => {
+        session.events++
+        session.zones++
+        this.track(session, tid).begin(ts, nameId)
+        this.bumpThread(session, tid)
+        this.bumpTime(session, ts)
+      },
+      zoneEnd: (tid, ts) => {
+        session.events++
+        this.track(session, tid).finish(ts)
+        this.bumpThread(session, tid)
+        this.bumpTime(session, ts)
+      },
+      frameMark: (tid, ts, frame) => {
+        session.events++
+        this.applyFrameMark(session, tid, ts, frame)
+      },
+      counter: (ts, nameId, value) => {
+        session.events++
+        let counter = session.counters.get(nameId)
+        if (!counter) {
+          counter = {
+            nameId,
+            name: session.strings.get(nameId) ?? `#${nameId}`,
+            latest: value,
+            series: new CounterSeries(),
+          }
+          session.counters.set(nameId, counter)
+        }
+        counter.latest = value
+        counter.series.push(ts, value)
+        this.bumpTime(session, ts)
+      },
+      marker: (tid, ts, nameId) => {
+        session.events++
+        session.markers.push({
+          tsUs: ts,
+          tid,
+          name: session.strings.get(nameId) ?? `#${nameId}`,
+        })
+        if (session.markers.length > MARKER_CAP) session.markers.shift()
+        this.bumpThread(session, tid)
+        this.bumpTime(session, ts)
+      },
+      error: () => {
+        session.parseErrors++
+      },
     })
+    this.sessions.set(id, session)
     this.order.push(id)
     this.notify()
     this.onSessionOpened?.(id)
@@ -203,17 +253,7 @@ class SessionStore {
   private ingest(id: number, chunk: Uint8Array): void {
     const session = this.sessions.get(id)
     if (!session) return
-    const text = session.carry + session.decoder.decode(chunk, { stream: true })
-    const lines = text.split('\n')
-    session.carry = lines.pop() ?? ''
-    for (const line of lines) {
-      if (!line) continue
-      try {
-        this.apply(session, JSON.parse(line) as Msg)
-      } catch {
-        session.parseErrors++
-      }
-    }
+    session.parser.push(chunk)
     this.markDirty()
   }
 
@@ -226,7 +266,7 @@ class SessionStore {
     return track
   }
 
-  private apply(session: Session, msg: Msg): void {
+  private applyControl(session: Session, msg: ControlMsg): void {
     session.events++
     switch (msg.t) {
       case 'hello':
@@ -249,59 +289,23 @@ class SessionStore {
           events: 0,
         })
         break
-      case 'fm':
-        if (session.mainTid === null) session.mainTid = msg.tid
-        this.track(session, msg.tid).markFrame(msg.ts)
-        if (msg.tid === session.mainTid) {
-          for (const [tid, track] of session.tracks) {
-            if (tid !== msg.tid) track.adoptFrame(msg.ts)
-          }
-          session.framesTotal = Math.max(session.framesTotal, msg.frame + 1)
-          session.fmTimes.push(msg.ts)
-          if (session.fmTimes.length > FM_WINDOW) session.fmTimes.shift()
-          session.frames.push(msg.ts, msg.frame)
-        }
-        this.bumpThread(session, msg.tid)
-        this.bumpTime(session, msg.ts)
-        break
-      case 'zb':
-        session.zones++
-        this.track(session, msg.tid).begin(msg.ts, msg.name)
-        this.bumpThread(session, msg.tid)
-        this.bumpTime(session, msg.ts)
-        break
-      case 'ze':
-        this.track(session, msg.tid).finish(msg.ts)
-        this.bumpThread(session, msg.tid)
-        this.bumpTime(session, msg.ts)
-        break
-      case 'ctr': {
-        let counter = session.counters.get(msg.name)
-        if (!counter) {
-          counter = {
-            nameId: msg.name,
-            name: session.strings.get(msg.name) ?? `#${msg.name}`,
-            latest: msg.value,
-            series: new CounterSeries(),
-          }
-          session.counters.set(msg.name, counter)
-        }
-        counter.latest = msg.value
-        counter.series.push(msg.ts, msg.value)
-        this.bumpTime(session, msg.ts)
-        break
-      }
-      case 'mk':
-        session.markers.push({
-          tsUs: msg.ts,
-          tid: msg.tid,
-          name: session.strings.get(msg.name) ?? `#${msg.name}`,
-        })
-        if (session.markers.length > MARKER_CAP) session.markers.shift()
-        this.bumpThread(session, msg.tid)
-        this.bumpTime(session, msg.ts)
-        break
     }
+  }
+
+  private applyFrameMark(session: Session, tid: number, tsUs: number, frame: number): void {
+    if (session.mainTid === null) session.mainTid = tid
+    this.track(session, tid).markFrame(tsUs)
+    if (tid === session.mainTid) {
+      for (const [otherTid, track] of session.tracks) {
+        if (otherTid !== tid) track.adoptFrame(tsUs)
+      }
+      session.framesTotal = Math.max(session.framesTotal, frame + 1)
+      session.fmTimes.push(tsUs)
+      if (session.fmTimes.length > FM_WINDOW) session.fmTimes.shift()
+      session.frames.push(tsUs, frame)
+    }
+    this.bumpThread(session, tid)
+    this.bumpTime(session, tsUs)
   }
 
   private bumpThread(session: Session, tid: number): void {

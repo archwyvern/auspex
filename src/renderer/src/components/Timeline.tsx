@@ -40,6 +40,10 @@ type TimelineProps = {
   // Arrow stepping through snapshot history in AVG mode (owned by
   // SessionView alongside the freeze state).
   onStepSnapshot: (delta: number) => void
+  // Zone selection (by interned name id) — selected instances highlighted,
+  // everything else dimmed; owned by SessionView so the sidebar follows.
+  selectedZone: number | null
+  onSelectZone: (nameId: number | null) => void
 }
 
 type Mode = 'avg' | 'one' | 'raw'
@@ -67,6 +71,8 @@ export const Timeline = memo(
     frozen,
     onToggleFreeze,
     onStepSnapshot,
+    selectedZone,
+    onSelectZone,
   }: TimelineProps) {
     const view = useRef<ViewState>({
       startUs: 0,
@@ -86,6 +92,12 @@ export const Timeline = memo(
     toggleFreezeRef.current = onToggleFreeze
     const stepSnapshotRef = useRef(onStepSnapshot)
     stepSnapshotRef.current = onStepSnapshot
+    const selectZoneRef = useRef(onSelectZone)
+    selectZoneRef.current = onSelectZone
+    // Zone name under the cursor, refreshed by the draw loop's hit-testing;
+    // clicks read it instead of re-hit-testing.
+    const hitName = useRef<number | null>(null)
+    const click = useRef<{ x: number; y: number; moved: boolean } | null>(null)
     const [oneFrozen, setOneFrozen] = useState(false)
     const oneFrame = useRef<FrameRef | null>(null)
     const latestFrame = useRef<FrameRef | null>(null)
@@ -167,6 +179,10 @@ export const Timeline = memo(
           return
         }
 
+        if (event.code === 'Escape') {
+          selectZoneRef.current(null)
+          return
+        }
         if (event.code === 'Digit1' || event.code === 'Numpad1') {
           setMode('avg')
           return
@@ -221,6 +237,7 @@ export const Timeline = memo(
       ctx.font = '12px "IBM Plex Mono", monospace'
       const hover = mouse.current
       let hit: string | null = null
+      hitName.current = null
 
       const drawRuler = (fromUs: number, toUs: number, scale: number, gridBottom: number, labelOffsetUs: number) => {
         const step = tickStep(1 / scale, 90)
@@ -285,14 +302,17 @@ export const Timeline = memo(
             const rx = Math.round(x)
             const rw = Math.max(Math.round(x + w) - rx, 1)
             const zy = top + TRACK_PAD + depth * LANE_H
-            ctx.fillStyle = zoneColor(track.name.get(row))
+            const nameId = track.name.get(row)
+            const dimmed = selectedZone !== null && nameId !== selectedZone
+            if (dimmed) ctx.globalAlpha = 0.3
+            ctx.fillStyle = zoneColor(nameId)
             ctx.fillRect(rx, zy, rw, LANE_H - 2)
             if (open) {
               ctx.fillStyle = '#fbbf24'
               ctx.fillRect(rx + rw - 1.5, zy, 1.5, LANE_H - 2)
             }
             if (rw > 44) {
-              const label = session.strings.get(track.name.get(row)) ?? ''
+              const label = session.strings.get(nameId) ?? ''
               const maxChars = Math.floor((rw - 8) / 7.3)
               if (maxChars >= 3) {
                 ctx.fillStyle = '#f5f5f7'
@@ -303,6 +323,12 @@ export const Timeline = memo(
                 )
               }
             }
+            ctx.globalAlpha = 1
+            if (selectedZone === nameId) {
+              ctx.strokeStyle = '#fbbf24'
+              ctx.lineWidth = 1
+              ctx.strokeRect(rx + 0.5, zy + 0.5, Math.max(rw - 1, 1), LANE_H - 3)
+            }
             if (
               hover &&
               hover.x >= rx &&
@@ -310,8 +336,9 @@ export const Timeline = memo(
               hover.y >= zy &&
               hover.y <= zy + LANE_H - 2
             ) {
-              const name = session.strings.get(track.name.get(row)) ?? '?'
+              const name = session.strings.get(nameId) ?? '?'
               hit = `${name} — ${open ? `${formatDuration(end - start)} (open)` : formatDuration(end - start)}`
+              hitName.current = nameId
             }
           }
 
@@ -489,10 +516,11 @@ export const Timeline = memo(
               const x = Math.round(GUTTER + entry.avgOffsetUs * scale)
               const w = Math.max(Math.round(entry.avgDurUs * scale), 1)
               const zy = y + TRACK_PAD + entry.depth * LANE_H
-              ctx.globalAlpha = Math.min(1, Math.max(0.3, entry.perFrame))
+              const dimmed = selectedZone !== null && entry.nameId !== selectedZone
+              const baseAlpha = Math.min(1, Math.max(0.3, entry.perFrame))
+              ctx.globalAlpha = dimmed ? baseAlpha * 0.3 : baseAlpha
               ctx.fillStyle = zoneColor(entry.nameId)
               ctx.fillRect(x, zy, w, LANE_H - 2)
-              ctx.globalAlpha = 1
               if (w > 44) {
                 const maxChars = Math.floor((w - 8) / 7.3)
                 if (maxChars >= 3) {
@@ -504,9 +532,16 @@ export const Timeline = memo(
                   )
                 }
               }
+              ctx.globalAlpha = 1
+              if (selectedZone === entry.nameId) {
+                ctx.strokeStyle = '#fbbf24'
+                ctx.lineWidth = 1
+                ctx.strokeRect(x + 0.5, zy + 0.5, Math.max(w - 1, 1), LANE_H - 3)
+              }
               if (hover && hover.x >= x && hover.x <= x + w && hover.y >= zy && hover.y <= zy + LANE_H - 2) {
                 const rate = entry.perFrame >= 0.995 ? '' : ` ×${entry.perFrame.toFixed(2)}/frame`
                 hit = `${entry.name} — avg ${formatDuration(entry.avgDurUs)}${rate}`
+                hitName.current = entry.nameId
               }
             }
             y += trackH + 4
@@ -612,13 +647,20 @@ export const Timeline = memo(
     }, [canvasRef])
 
     const pointerDown = (event: React.PointerEvent<HTMLCanvasElement>) => {
-      if (event.button !== 0 || mode !== 'raw') return
+      if (event.button !== 0) return
+      click.current = { x: event.clientX, y: event.clientY, moved: false }
+      if (mode !== 'raw') return
       drag.current = { lastX: event.clientX }
       event.currentTarget.setPointerCapture(event.pointerId)
     }
     const pointerMove = (event: React.PointerEvent<HTMLCanvasElement>) => {
       const rect = event.currentTarget.getBoundingClientRect()
       mouse.current = { x: event.clientX - rect.left, y: event.clientY - rect.top }
+      if (click.current) {
+        const dx = event.clientX - click.current.x
+        const dy = event.clientY - click.current.y
+        if (dx * dx + dy * dy > 16) click.current.moved = true
+      }
       if (!drag.current) return
       const v = view.current
       const scale = (rect.width - GUTTER) / (v.endUs - v.startUs)
@@ -632,8 +674,15 @@ export const Timeline = memo(
       }
     }
     const pointerUp = (event: React.PointerEvent<HTMLCanvasElement>) => {
-      drag.current = null
-      event.currentTarget.releasePointerCapture(event.pointerId)
+      if (click.current && !click.current.moved) {
+        const target = hitName.current
+        onSelectZone(target === selectedZone ? null : target)
+      }
+      click.current = null
+      if (drag.current) {
+        drag.current = null
+        event.currentTarget.releasePointerCapture(event.pointerId)
+      }
     }
 
     const modeButton = (target: Mode, key: string, label: string) => (
@@ -714,5 +763,6 @@ export const Timeline = memo(
   (prev, next) =>
     prev.session.id === next.session.id &&
     prev.snapshot === next.snapshot &&
-    prev.frozen === next.frozen,
+    prev.frozen === next.frozen &&
+    prev.selectedZone === next.selectedZone,
 )

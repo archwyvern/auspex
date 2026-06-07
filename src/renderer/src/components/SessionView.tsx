@@ -4,6 +4,7 @@ import { formatInt, formatSessionSeconds, formatUptime } from '../lib/fmt'
 import { FrameBar } from './FrameBar'
 import { Timeline, type TimelineController } from './Timeline'
 import { SnapshotPanel } from './SnapshotPanel'
+import { ZonePanel } from './ZonePanel'
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
@@ -46,8 +47,12 @@ export function SessionView({ session }: { session: Session }) {
   // Frozen AVG window: held here so the waterfall and the zones table
   // freeze on the same snapshot together.
   const [frozenAvg, setFrozenAvg] = useState<Snapshot | null>(null)
+  const [selectedZone, setSelectedZone] = useState<number | null>(null)
 
-  useEffect(() => setFrozenAvg(null), [session.id])
+  useEffect(() => {
+    setFrozenAvg(null)
+    setSelectedZone(null)
+  }, [session.id])
 
   const toggleFreeze = useCallback(() => {
     setFrozenAvg(prev => (prev ? null : (session.snapshots[session.snapshots.length - 1] ?? null)))
@@ -124,6 +129,8 @@ export function SessionView({ session }: { session: Session }) {
           frozen={frozenAvg !== null}
           onToggleFreeze={toggleFreeze}
           onStepSnapshot={stepSnapshot}
+          selectedZone={selectedZone}
+          onSelectZone={setSelectedZone}
         />
       </div>
 
@@ -135,7 +142,21 @@ export function SessionView({ session }: { session: Session }) {
           <StatTile label="zones" value={formatInt(session.zones)} />
         </div>
 
-        <SnapshotPanel snapshot={shownSnapshot} frozen={frozenAvg !== null} />
+        {selectedZone !== null && (
+          <ZonePanel
+            key={`zp-${session.id}-${selectedZone}`}
+            session={session}
+            nameId={selectedZone}
+            onClose={() => setSelectedZone(null)}
+          />
+        )}
+
+        <SnapshotPanel
+          snapshot={shownSnapshot}
+          frozen={frozenAvg !== null}
+          selectedZone={selectedZone}
+          onSelectZone={setSelectedZone}
+        />
 
         <Panel title="markers" className="h-56 shrink-0">
           {markers.length === 0 ? (

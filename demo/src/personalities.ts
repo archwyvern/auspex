@@ -1,4 +1,4 @@
-import { makeBursty, makeWander, type Personality } from './sim'
+import { makeBursty, makeWander, type Personality, type ZoneSpec } from './sim'
 
 const space: Personality = {
   key: 'space',
@@ -242,4 +242,68 @@ const bench: Personality = {
   gc: { limitMb: 384, floorMb: 140, ratePerSec: 90, pauseMs: [4, 14] },
 }
 
-export const personalities: Personality[] = [space, city, server, jitter, bench]
+// Ingestion stress: ~300 zones per frame at 60fps across six threads —
+// roughly 35k events/s on the wire, an order of magnitude past the other
+// personalities. Exists to find the viewer's limits before a real engine
+// does.
+function stressSystems(prefix: string, count: number, childCount: number): ZoneSpec[] {
+  return Array.from({ length: count }, (_, i) => ({
+    name: `${prefix}${i}`,
+    base: 0.05,
+    jitter: 0.5,
+    children: Array.from({ length: childCount }, (_, j) => ({
+      name: `${prefix}${i}.${j}`,
+      base: 0.025,
+      jitter: 0.6,
+    })),
+  }))
+}
+
+const stress: Personality = {
+  key: 'stress',
+  appName: 'Maelstrom',
+  fps: 60,
+  main: {
+    tid: 1,
+    name: 'Main',
+    zones: [
+      {
+        name: 'Frame',
+        base: 0.1,
+        children: [
+          { name: 'Input', base: 0.05 },
+          { name: 'Update', base: 0.2, children: stressSystems('Sys', 24, 4) },
+          { name: 'Audio', base: 0.1 },
+        ],
+      },
+    ],
+  },
+  render: {
+    tid: 2,
+    name: 'Render',
+    zones: [
+      {
+        name: 'RenderFrame',
+        base: 0.1,
+        children: stressSystems('Pass', 12, 3),
+      },
+    ],
+  },
+  jobs: Array.from({ length: 4 }, (_, i) => ({
+    tid: 3 + i,
+    name: `Worker ${i}`,
+    zones: stressSystems(`Job${i}_`, 5, 3),
+  })),
+  jobChance: 0.9,
+  counters: [
+    { name: 'entities', next: makeWander(48000, 300, 20000, 90000) },
+    { name: 'drawCalls', next: makeWander(3200, 80, 1000, 8000) },
+    { name: 'particles', next: makeBursty(15000, 240000, 0.01, 0.92) },
+    { name: 'netPackets', next: makeWander(800, 60, 100, 2500) },
+    { name: 'audioVoices', next: makeWander(96, 4, 0, 256) },
+  ],
+  hitches: [{ name: 'AssetLoad', marker: true, meanIntervalMs: 12_000, durationMs: [20, 45] }],
+  gc: { limitMb: 768, floorMb: 300, ratePerSec: 40, pauseMs: [10, 30] },
+}
+
+export const personalities: Personality[] = [space, city, server, jitter, bench, stress]

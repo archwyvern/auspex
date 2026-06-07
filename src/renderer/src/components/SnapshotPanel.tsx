@@ -4,12 +4,19 @@ import { formatDuration } from '../lib/canvas'
 type SnapshotPanelProps = {
   snapshot: Snapshot | null
   frozen?: boolean
+  selectedZone?: number | null
+  onSelectZone?: (nameId: number | null) => void
 }
 
 // Per-zone stats for the latest aggregation window. Sorted by total
 // self-time: the honest "where the time actually went" ordering — parents
 // don't absorb credit for their children.
-export function SnapshotPanel({ snapshot, frozen = false }: SnapshotPanelProps) {
+export function SnapshotPanel({
+  snapshot,
+  frozen = false,
+  selectedZone = null,
+  onSelectZone,
+}: SnapshotPanelProps) {
   const windowUs = snapshot ? snapshot.endUs - snapshot.startUs : 0
 
   return (
@@ -44,8 +51,16 @@ export function SnapshotPanel({ snapshot, frozen = false }: SnapshotPanelProps) 
             </thead>
             <tbody>
               {snapshot.zones.map(zone => (
-                <tr key={zone.nameId} className="border-t border-hairline">
-                  <td className="px-3 py-1 text-neutral-50">{zone.name}</td>
+                <tr
+                  key={zone.nameId}
+                  onClick={() => onSelectZone?.(zone.nameId === selectedZone ? null : zone.nameId)}
+                  className={`cursor-pointer border-t border-hairline ${
+                    zone.nameId === selectedZone ? 'bg-panel-bright' : 'hover:bg-white/5'
+                  }`}
+                >
+                  <td className={`px-3 py-1 ${zone.nameId === selectedZone ? 'text-ember' : 'text-neutral-50'}`}>
+                    {zone.name}
+                  </td>
                   <td className="px-2 py-1 text-right text-neutral-300 tabular-nums">{zone.count}</td>
                   <td className="px-2 py-1 text-right text-neutral-50 tabular-nums">
                     {formatDuration(zone.totalUs / zone.count)}
