@@ -194,9 +194,9 @@ const jitter: Personality = {
   counters: [{ name: 'particles', next: makeBursty(2000, 90000, 0.02, 0.9) }],
   hitches: [{ name: 'Spike', meanIntervalMs: 4000, durationMs: [20, 35] }],
   // 1.5s of clean pacing alternating with 1.5s of blown budget: the bad phase
-  // pushes the ~5.2ms main thread to ~17.7ms, past the 16.6ms budget, so
-  // frames visibly slip instead of just getting fatter.
-  frameScale: frame => (Math.floor(frame / 90) % 2 === 0 ? 0.85 : 3.4),
+  // pushes the ~5.2ms main thread to ~31ms, so cadence visibly collapses to
+  // ~32fps instead of just filling the frame.
+  frameScale: frame => (Math.floor(frame / 90) % 2 === 0 ? 0.85 : 6),
 }
 
 export const personalities: Personality[] = [space, city, server, jitter]
