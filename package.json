@@ -26,6 +26,7 @@
     "vite": "^7.3.5"
   },
   "dependencies": {
+    "@carapace/shell": "github:archwyvern/carapace#master",
     "@fluentui/react-icons": "^2.0.328",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"

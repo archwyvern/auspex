@@ -1,3 +1,4 @@
+import { StatusBar as ShellStatusBar, StatusDot } from '@carapace/shell'
 import { Kbd } from './Kbd'
 
 type StatusBarProps = {
@@ -7,46 +8,52 @@ type StatusBarProps = {
 }
 
 export function StatusBar({ state, sessionCount, demoRunning }: StatusBarProps) {
+  const tone = state.listening ? 'success' : state.error ? 'error' : 'neutral'
   return (
-    <div className="flex h-8 items-center gap-3 border-t border-hairline bg-panel px-3 text-sm">
-      <span
-        className={`size-2 rounded-full ${
-          state.listening ? 'bg-emerald-400' : state.error ? 'bg-red-400' : 'bg-neutral-600'
-        }`}
-      />
-      {state.listening ? (
-        <span className="text-neutral-300">
-          listening{' '}
-          <span className="text-neutral-50 tabular-nums">
-            {state.host}:{state.port}
+    <ShellStatusBar
+      left={
+        <>
+          <span className="flex items-center gap-2">
+            <StatusDot tone={tone} pulse={state.listening} />
+            {state.listening ? (
+              <span>
+                listening{' '}
+                <span className="text-fg tabular-nums">
+                  {state.host}:{state.port}
+                </span>
+              </span>
+            ) : state.error ? (
+              <span className="text-error">listen failed: {state.error}</span>
+            ) : (
+              <span>starting...</span>
+            )}
           </span>
-        </span>
-      ) : state.error ? (
-        <span className="text-red-400">listen failed: {state.error}</span>
-      ) : (
-        <span className="text-neutral-300">starting...</span>
-      )}
-      <span className="flex items-center gap-1.5 text-neutral-300">
-        <Kbd>ctrl</Kbd>
-        <Kbd>←</Kbd>
-        <Kbd>→</Kbd> tabs
-      </span>
-      <span className="flex-1" />
-      <button
-        onClick={() => (demoRunning ? window.auspex.stopDemo() : window.auspex.runDemo())}
-        className={`rounded-[3px] border px-2.5 py-0.5 transition-colors ${
-          demoRunning
-            ? 'border-ember/40 text-ember hover:bg-ember/10'
-            : 'border-hairline text-neutral-300 hover:bg-white/5 hover:text-neutral-50'
-        }`}
-      >
-        {demoRunning ? 'stop demo' : 'run demo'}
-      </button>
-      <span className="text-neutral-300">
-        <span className="text-neutral-50 tabular-nums">{sessionCount}</span> session
-        {sessionCount === 1 ? '' : 's'}
-      </span>
-      <span className="text-neutral-300">electron {window.auspex.versions.electron}</span>
-    </div>
+          <span className="flex items-center gap-1.5">
+            <Kbd>ctrl</Kbd>
+            <Kbd>←</Kbd>
+            <Kbd>→</Kbd> tabs
+          </span>
+        </>
+      }
+      right={
+        <>
+          <button
+            onClick={() => (demoRunning ? window.auspex.stopDemo() : window.auspex.runDemo())}
+            className={`rounded-control border px-2 py-0.5 transition-colors ${
+              demoRunning
+                ? 'border-accent/40 text-accent hover:bg-accent/10'
+                : 'border-border text-fg-mid hover:bg-surface-raised hover:text-fg'
+            }`}
+          >
+            {demoRunning ? 'stop demo' : 'run demo'}
+          </button>
+          <span>
+            <span className="text-fg tabular-nums">{sessionCount}</span> session
+            {sessionCount === 1 ? '' : 's'}
+          </span>
+          <span>electron {window.auspex.versions.electron}</span>
+        </>
+      }
+    />
   )
 }

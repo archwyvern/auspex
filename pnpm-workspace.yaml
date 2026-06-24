@@ -4,3 +4,8 @@ packages:
 onlyBuiltDependencies:
   - electron
   - esbuild
+
+# carapace is a sibling repo (../carapace), not a workspace member: declare it as a
+# github dep (the authored reference) but resolve it to the local checkout via symlink.
+overrides:
+  '@carapace/shell': link:../carapace/packages/shell

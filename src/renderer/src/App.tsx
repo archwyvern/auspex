@@ -1,4 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
+import { Workbench, HostProvider } from '@carapace/shell'
+import { host } from './lib/host'
 import { store } from './lib/store'
 import { TabStrip } from './components/TabStrip'
 import { SessionView } from './components/SessionView'
@@ -43,32 +45,38 @@ export default function App() {
     (activeId !== null ? store.sessions.get(activeId) : undefined) ?? sessions[sessions.length - 1]
 
   return (
-    <div className="flex h-full flex-col">
-      <header className="flex h-10 shrink-0 items-stretch border-b border-hairline bg-panel-bright">
-        <div className="flex items-center gap-2 border-r border-hairline px-3">
-          <span className="font-display text-sm font-semibold tracking-[0.25em] text-ember">AUSPEX</span>
+    <HostProvider host={host}>
+      <Workbench
+        draggable
+        logo={
+          <span className="font-display text-sm font-semibold tracking-[0.25em] text-ember">
+            AUSPEX
+          </span>
+        }
+        statusBar={
+          <StatusBar
+            state={store.serverState}
+            sessionCount={sessions.length}
+            demoRunning={store.demoRunning}
+          />
+        }
+      >
+        <div className="flex h-full flex-col">
+          <TabStrip
+            sessions={sessions}
+            activeId={active?.id ?? null}
+            onSelect={setActiveId}
+            onClose={id => store.closeTab(id)}
+          />
+          <main className="min-h-0 flex-1">
+            {active ? (
+              <SessionView session={active} />
+            ) : (
+              <EmptyState state={store.serverState} demoRunning={store.demoRunning} />
+            )}
+          </main>
         </div>
-        <TabStrip
-          sessions={sessions}
-          activeId={active?.id ?? null}
-          onSelect={setActiveId}
-          onClose={id => store.closeTab(id)}
-        />
-      </header>
-
-      <main className="min-h-0 flex-1">
-        {active ? (
-          <SessionView session={active} />
-        ) : (
-          <EmptyState state={store.serverState} demoRunning={store.demoRunning} />
-        )}
-      </main>
-
-      <StatusBar
-        state={store.serverState}
-        sessionCount={sessions.length}
-        demoRunning={store.demoRunning}
-      />
-    </div>
+      </Workbench>
+    </HostProvider>
   )
 }

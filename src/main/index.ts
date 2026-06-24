@@ -1,4 +1,5 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
+import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { ProfilerServer } from './server'
 import { DemoRunner } from './demoRunner'
@@ -6,19 +7,47 @@ import { DemoRunner } from './demoRunner'
 const profilerServer = new ProfilerServer()
 const demoRunner = new DemoRunner()
 
+// `--screenshot <path>`: capture the rendered window to a PNG and exit (headless verification).
+const screenshotIndex = process.argv.indexOf('--screenshot')
+const screenshotPath = screenshotIndex >= 0 ? process.argv[screenshotIndex + 1] : null
+// `--demo`: auto-start the demo producers on load (handy with --screenshot for a populated capture).
+const autoDemo = process.argv.includes('--demo')
+
+let mainWindow: BrowserWindow | null = null
+
 function createWindow(): void {
   const window = new BrowserWindow({
     width: 1600,
     height: 900,
     show: false,
+    // Frameless: carapace's TopBar is the title bar (logo + window controls + drag region).
+    frame: false,
     autoHideMenuBar: true,
     backgroundColor: '#0a0c10',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
     },
   })
+  mainWindow = window
 
   window.on('ready-to-show', () => window.show())
+  window.on('maximize', () => window.webContents.send('auspex:window-maximized', true))
+  window.on('unmaximize', () => window.webContents.send('auspex:window-maximized', false))
+
+  if (autoDemo) {
+    window.webContents.once('did-finish-load', () => demoRunner.start())
+  }
+
+  if (screenshotPath) {
+    window.webContents.once('did-finish-load', () => {
+      setTimeout(() => {
+        void window.webContents.capturePage().then(image => {
+          writeFileSync(screenshotPath, image.toPNG())
+          app.quit()
+        })
+      }, autoDemo ? 4500 : 1500)
+    })
+  }
 
   window.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
@@ -42,6 +71,16 @@ app.whenReady().then(() => {
   })
   ipcMain.on('auspex:demo-run', () => demoRunner.start())
   ipcMain.on('auspex:demo-stop', () => demoRunner.stop())
+
+  // Window controls for carapace's frameless TopBar (host.window seam).
+  ipcMain.handle('auspex:window-minimize', () => mainWindow?.minimize())
+  ipcMain.handle('auspex:window-toggle-maximize', () => {
+    if (mainWindow?.isMaximized()) mainWindow.unmaximize()
+    else mainWindow?.maximize()
+  })
+  ipcMain.handle('auspex:window-close', () => mainWindow?.close())
+  ipcMain.handle('auspex:window-is-maximized', () => mainWindow?.isMaximized() ?? false)
+
   profilerServer.start()
   createWindow()
 })

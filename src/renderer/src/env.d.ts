@@ -25,6 +25,11 @@ declare global {
       runDemo: () => void
       stopDemo: () => void
       onDemoState: (callback: (state: { running: boolean }) => void) => () => void
+      windowMinimize: () => Promise<void>
+      windowToggleMaximize: () => Promise<void>
+      windowClose: () => Promise<void>
+      windowIsMaximized: () => Promise<boolean>
+      onWindowMaximized: (callback: (max: boolean) => void) => () => void
     }
   }
 }

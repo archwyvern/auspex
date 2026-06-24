@@ -43,6 +43,24 @@ const api = {
     ipcRenderer.on('auspex:demo-state', listener)
     return () => ipcRenderer.off('auspex:demo-state', listener)
   },
+  // Window controls for carapace's frameless TopBar (the host.window seam).
+  windowMinimize(): Promise<void> {
+    return ipcRenderer.invoke('auspex:window-minimize')
+  },
+  windowToggleMaximize(): Promise<void> {
+    return ipcRenderer.invoke('auspex:window-toggle-maximize')
+  },
+  windowClose(): Promise<void> {
+    return ipcRenderer.invoke('auspex:window-close')
+  },
+  windowIsMaximized(): Promise<boolean> {
+    return ipcRenderer.invoke('auspex:window-is-maximized')
+  },
+  onWindowMaximized(callback: (max: boolean) => void): () => void {
+    const listener = (_event: IpcRendererEvent, max: boolean) => callback(max)
+    ipcRenderer.on('auspex:window-maximized', listener)
+    return () => ipcRenderer.off('auspex:window-maximized', listener)
+  },
 }
 
 contextBridge.exposeInMainWorld('auspex', api)
