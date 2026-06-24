@@ -28,6 +28,8 @@
   "dependencies": {
     "@carapace/shell": "github:archwyvern/carapace#master",
     "@fluentui/react-icons": "^2.0.328",
+    "@fontsource-variable/inter": "^5.2.8",
+    "@fontsource-variable/jetbrains-mono": "^5.2.8",
     "react": "^19.2.7",
     "react-dom": "^19.2.7"
   }

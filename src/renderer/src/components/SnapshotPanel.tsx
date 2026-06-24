@@ -20,27 +20,27 @@ export function SnapshotPanel({
   const windowUs = snapshot ? snapshot.endUs - snapshot.startUs : 0
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col rounded-[3px] border border-hairline bg-panel">
-      <div className="flex items-baseline gap-3 border-b border-hairline px-3 py-1.5">
-        <div className="font-display text-sm font-semibold tracking-widest text-neutral-300 uppercase">
+    <div className="flex min-h-0 flex-1 flex-col rounded-[3px] border border-border bg-surface">
+      <div className="flex items-baseline gap-3 border-b border-border px-3 py-1.5">
+        <div className="font-sans text-sm font-semibold tracking-widest text-fg-mid uppercase">
           zones
         </div>
         {snapshot && (
           <>
-            <span className="text-sm text-neutral-300">
+            <span className="text-sm text-fg-mid">
               last {snapshot.frames} frames @ {(snapshot.startUs / 1_000_000).toFixed(1)}s
             </span>
-            {frozen && <span className="text-sm text-ember">PAUSED</span>}
+            {frozen && <span className="text-sm text-accent">PAUSED</span>}
           </>
         )}
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">
         {!snapshot ? (
-          <div className="px-3 py-2 text-sm text-neutral-300">collecting...</div>
+          <div className="px-3 py-2 text-sm text-fg-mid">collecting...</div>
         ) : (
           <table className="w-full text-left text-sm">
-            <thead className="sticky top-0 bg-panel">
-              <tr className="text-neutral-300">
+            <thead className="sticky top-0 bg-surface">
+              <tr className="text-fg-mid">
                 <th className="px-3 py-1 font-normal tracking-widest uppercase">zone</th>
                 <th className="px-2 py-1 text-right font-normal tracking-widest uppercase">count</th>
                 <th className="px-2 py-1 text-right font-normal tracking-widest uppercase">avg</th>
@@ -54,24 +54,24 @@ export function SnapshotPanel({
                 <tr
                   key={zone.nameId}
                   onClick={() => onSelectZone?.(zone.nameId === selectedZone ? null : zone.nameId)}
-                  className={`cursor-pointer border-t border-hairline ${
-                    zone.nameId === selectedZone ? 'bg-panel-bright' : 'hover:bg-white/5'
+                  className={`cursor-pointer border-t border-border ${
+                    zone.nameId === selectedZone ? 'bg-surface-raised' : 'hover:bg-white/5'
                   }`}
                 >
-                  <td className={`px-3 py-1 ${zone.nameId === selectedZone ? 'text-ember' : 'text-neutral-50'}`}>
+                  <td className={`px-3 py-1 ${zone.nameId === selectedZone ? 'text-accent' : 'text-fg'}`}>
                     {zone.name}
                   </td>
-                  <td className="px-2 py-1 text-right text-neutral-300 tabular-nums">{zone.count}</td>
-                  <td className="px-2 py-1 text-right text-neutral-50 tabular-nums">
+                  <td className="px-2 py-1 text-right text-fg-mid tabular-nums">{zone.count}</td>
+                  <td className="px-2 py-1 text-right text-fg tabular-nums">
                     {formatDuration(zone.totalUs / zone.count)}
                   </td>
-                  <td className="px-2 py-1 text-right text-neutral-50 tabular-nums">
+                  <td className="px-2 py-1 text-right text-fg tabular-nums">
                     {formatDuration(zone.selfUs)}
                   </td>
-                  <td className="px-2 py-1 text-right text-neutral-50 tabular-nums">
+                  <td className="px-2 py-1 text-right text-fg tabular-nums">
                     {formatDuration(zone.maxUs)}
                   </td>
-                  <td className="px-3 py-1 text-right text-ember tabular-nums">
+                  <td className="px-3 py-1 text-right text-accent tabular-nums">
                     {((zone.selfUs / windowUs) * 100).toFixed(1)}
                   </td>
                 </tr>

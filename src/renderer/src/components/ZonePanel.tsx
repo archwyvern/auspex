@@ -48,16 +48,16 @@ export const ZonePanel = memo(
     })
 
     return (
-      <div className="flex h-44 shrink-0 flex-col rounded-[3px] border border-ember/40 bg-panel">
-        <div className="flex items-baseline gap-3 border-b border-hairline px-3 py-1.5">
-          <div className="font-display text-sm font-semibold tracking-widest text-ember uppercase">
+      <div className="flex h-44 shrink-0 flex-col rounded-[3px] border border-accent/40 bg-surface">
+        <div className="flex items-baseline gap-3 border-b border-border px-3 py-1.5">
+          <div className="font-sans text-sm font-semibold tracking-widest text-accent uppercase">
             zone
           </div>
-          <span className="text-sm text-neutral-50">{name}</span>
+          <span className="text-sm text-fg">{name}</span>
           <span className="flex-1" />
           <button
             onClick={onClose}
-            className="rounded-[3px] border border-hairline px-1.5 text-sm text-neutral-300 hover:bg-white/5 hover:text-neutral-50"
+            className="rounded-[3px] border border-border px-1.5 text-sm text-fg-mid hover:bg-white/5 hover:text-fg"
           >
             esc
           </button>
@@ -65,21 +65,21 @@ export const ZonePanel = memo(
         <div className="flex gap-4 px-3 py-1.5 text-sm">
           {stat ? (
             <>
-              <span className="text-neutral-300">
-                ×<span className="text-neutral-50 tabular-nums">{(stat.count / (latest?.frames ?? 1)).toFixed(2)}</span>/frame
+              <span className="text-fg-mid">
+                ×<span className="text-fg tabular-nums">{(stat.count / (latest?.frames ?? 1)).toFixed(2)}</span>/frame
               </span>
-              <span className="text-neutral-300">
-                avg <span className="text-neutral-50 tabular-nums">{formatDuration(stat.totalUs / stat.count)}</span>
+              <span className="text-fg-mid">
+                avg <span className="text-fg tabular-nums">{formatDuration(stat.totalUs / stat.count)}</span>
               </span>
-              <span className="text-neutral-300">
-                self <span className="text-neutral-50 tabular-nums">{formatDuration(stat.selfUs / (latest?.frames ?? 1))}</span>/frame
+              <span className="text-fg-mid">
+                self <span className="text-fg tabular-nums">{formatDuration(stat.selfUs / (latest?.frames ?? 1))}</span>/frame
               </span>
-              <span className="text-neutral-300">
-                max <span className="text-neutral-50 tabular-nums">{formatDuration(stat.maxUs)}</span>
+              <span className="text-fg-mid">
+                max <span className="text-fg tabular-nums">{formatDuration(stat.maxUs)}</span>
               </span>
             </>
           ) : (
-            <span className="text-neutral-300">not present in current window</span>
+            <span className="text-fg-mid">not present in current window</span>
           )}
         </div>
         <div className="relative min-h-0 flex-1 px-1 pb-1">

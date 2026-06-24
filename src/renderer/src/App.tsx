@@ -1,8 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
-import { Workbench, HostProvider } from '@carapace/shell'
+import { Workbench, HostProvider, EditorTabs, StatusDot } from '@carapace/shell'
 import { host } from './lib/host'
 import { store } from './lib/store'
-import { TabStrip } from './components/TabStrip'
 import { SessionView } from './components/SessionView'
 import { EmptyState } from './components/EmptyState'
 import { StatusBar } from './components/StatusBar'
@@ -49,7 +48,7 @@ export default function App() {
       <Workbench
         draggable
         logo={
-          <span className="font-display text-sm font-semibold tracking-[0.25em] text-ember">
+          <span className="font-sans text-sm font-semibold tracking-[0.25em] text-accent">
             AUSPEX
           </span>
         }
@@ -62,15 +61,28 @@ export default function App() {
         }
       >
         <div className="flex h-full flex-col">
-          <TabStrip
-            sessions={sessions}
-            activeId={active?.id ?? null}
-            onSelect={setActiveId}
-            onClose={id => store.closeTab(id)}
-          />
+          {sessions.length > 0 && (
+            <EditorTabs
+              tabs={sessions.map(s => ({
+                id: String(s.id),
+                title: s.name ?? `session ${s.id}`,
+                icon: (
+                  <StatusDot
+                    tone={s.status === 'live' ? 'success' : s.status === 'handshaking' ? 'warning' : 'neutral'}
+                    pulse={s.status === 'live'}
+                  />
+                ),
+              }))}
+              activeId={active ? String(active.id) : null}
+              onSelect={id => setActiveId(Number(id))}
+              onClose={id => store.closeTab(Number(id))}
+            />
+          )}
           <main className="min-h-0 flex-1">
             {active ? (
-              <SessionView session={active} />
+              <div className="h-full font-mono">
+                <SessionView session={active} />
+              </div>
             ) : (
               <EmptyState state={store.serverState} demoRunning={store.demoRunning} />
             )}

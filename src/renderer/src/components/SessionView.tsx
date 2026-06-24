@@ -8,7 +8,7 @@ import { ZonePanel } from './ZonePanel'
 
 function Label({ children }: { children: React.ReactNode }) {
   return (
-    <div className="font-display text-sm font-semibold tracking-widest text-neutral-300 uppercase">
+    <div className="font-sans text-sm font-semibold tracking-widest text-fg-mid uppercase">
       {children}
     </div>
   )
@@ -16,9 +16,9 @@ function Label({ children }: { children: React.ReactNode }) {
 
 function StatTile({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
   return (
-    <div className="rounded-[3px] border border-hairline bg-panel px-3 py-2">
+    <div className="rounded-[3px] border border-border bg-surface px-3 py-2">
       <Label>{label}</Label>
-      <div className={`mt-0.5 text-xl tabular-nums ${accent ? 'text-ember' : 'text-neutral-50'}`}>{value}</div>
+      <div className={`mt-0.5 text-xl tabular-nums ${accent ? 'text-accent' : 'text-fg'}`}>{value}</div>
     </div>
   )
 }
@@ -33,8 +33,8 @@ function Panel({
   children: React.ReactNode
 }) {
   return (
-    <div className={`flex min-h-0 flex-col rounded-[3px] border border-hairline bg-panel ${className}`}>
-      <div className="border-b border-hairline px-3 py-1.5">
+    <div className={`flex min-h-0 flex-col rounded-[3px] border border-border bg-surface ${className}`}>
+      <div className="border-b border-border px-3 py-1.5">
         <Label>{title}</Label>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto">{children}</div>
@@ -78,10 +78,10 @@ export function SessionView({ session }: { session: Session }) {
     session.status === 'live' ? 'LIVE' : session.status === 'closed' ? 'DISCONNECTED' : 'HANDSHAKE'
   const statusColor =
     session.status === 'live'
-      ? 'text-emerald-400 border-emerald-400/40'
+      ? 'text-success border-success/40'
       : session.status === 'closed'
-        ? 'text-red-400 border-red-400/40'
-        : 'text-ember border-ember/40'
+        ? 'text-error border-error/40'
+        : 'text-accent border-accent/40'
 
   const markers = [...session.markers].slice(-50).reverse()
   const latestSnapshot = session.snapshots[session.snapshots.length - 1] ?? null
@@ -91,25 +91,25 @@ export function SessionView({ session }: { session: Session }) {
     <div className="flex h-full gap-2 p-2">
       <div className="flex min-w-0 flex-1 flex-col gap-2">
         <div className="flex items-baseline gap-4 px-1">
-          <h1 className="font-display text-xl font-semibold text-neutral-50">
+          <h1 className="font-sans text-xl font-semibold text-fg">
             {session.name ?? `session ${session.id}`}
           </h1>
-          <span className="text-sm text-neutral-300">
-            pid <span className="text-neutral-50 tabular-nums">{session.pid ?? '?'}</span>
+          <span className="text-sm text-fg-mid">
+            pid <span className="text-fg tabular-nums">{session.pid ?? '?'}</span>
           </span>
-          <span className="text-sm text-neutral-300">
-            up <span className="text-neutral-50 tabular-nums">{formatUptime(session.startMs)}</span>
+          <span className="text-sm text-fg-mid">
+            up <span className="text-fg tabular-nums">{formatUptime(session.startMs)}</span>
           </span>
           <span className={`rounded-[3px] border px-2 py-0.5 text-sm tracking-widest ${statusColor}`}>
             {statusLabel}
           </span>
           {session.parseErrors > 0 && (
-            <span className="text-sm text-red-400">{session.parseErrors} parse errors</span>
+            <span className="text-sm text-error">{session.parseErrors} parse errors</span>
           )}
           <span className="flex-1" />
-          <span className="text-sm text-neutral-300">
+          <span className="text-sm text-fg-mid">
             budget{' '}
-            <span className="text-neutral-50 tabular-nums">
+            <span className="text-fg tabular-nums">
               {(session.budgetUs / 1000).toFixed(1)}ms
             </span>
           </span>
@@ -160,16 +160,16 @@ export function SessionView({ session }: { session: Session }) {
 
         <Panel title="markers" className="h-56 shrink-0">
           {markers.length === 0 ? (
-            <div className="px-3 py-1.5 text-sm text-neutral-300">none yet</div>
+            <div className="px-3 py-1.5 text-sm text-fg-mid">none yet</div>
           ) : (
             <table className="w-full text-left text-sm">
               <tbody>
                 {markers.map((marker, index) => (
-                  <tr key={index} className="border-b border-hairline last:border-b-0">
-                    <td className="px-3 py-1 text-neutral-300 tabular-nums">
+                  <tr key={index} className="border-b border-border last:border-b-0">
+                    <td className="px-3 py-1 text-fg-mid tabular-nums">
                       {formatSessionSeconds(marker.tsUs, session.tsFreq)}
                     </td>
-                    <td className="px-3 py-1 text-ember">{marker.name}</td>
+                    <td className="px-3 py-1 text-accent">{marker.name}</td>
                   </tr>
                 ))}
               </tbody>

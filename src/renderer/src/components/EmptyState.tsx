@@ -4,8 +4,8 @@ import { Button } from '@carapace/shell'
 export function EmptyState({ state, demoRunning }: { state: AuspexServerState; demoRunning: boolean }) {
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4">
-      <PulseRegular className="text-7xl text-ember" />
-      <div className="font-display text-2xl font-semibold tracking-[0.3em] text-fg">AUSPEX</div>
+      <PulseRegular className="text-7xl text-accent" />
+      <div className="font-sans text-2xl font-semibold tracking-[0.3em] text-fg">AUSPEX</div>
       <div className="text-base text-fg-mid">
         {state.listening ? (
           <>

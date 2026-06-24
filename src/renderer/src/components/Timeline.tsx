@@ -689,23 +689,23 @@ export const Timeline = memo(
       <button
         onClick={() => setMode(target)}
         className={`px-2.5 py-1 ${
-          mode === target ? 'bg-panel-bright text-ember' : 'text-neutral-300 hover:text-neutral-50'
+          mode === target ? 'bg-surface-raised text-accent' : 'text-fg-mid hover:text-fg'
         }`}
       >
         {label}
-        <span className={mode === target ? 'ml-1 text-ember/70' : 'ml-1 text-neutral-300'}>({key})</span>
+        <span className={mode === target ? 'ml-1 text-accent/70' : 'ml-1 text-fg-mid'}>({key})</span>
       </button>
     )
 
     const liveIndicator =
       mode === 'avg' ? (
-        frozen ? <span className="text-ember">PAUSED</span> : <span className="text-emerald-400">LIVE</span>
+        frozen ? <span className="text-accent">PAUSED</span> : <span className="text-success">LIVE</span>
       ) : mode === 'one' ? (
-        oneFrozen ? <span className="text-ember">PAUSED</span> : <span className="text-emerald-400">LIVE</span>
+        oneFrozen ? <span className="text-accent">PAUSED</span> : <span className="text-success">LIVE</span>
       ) : following ? (
-        <span className="text-emerald-400">FOLLOW</span>
+        <span className="text-success">FOLLOW</span>
       ) : (
-        <span className="text-ember">PAUSED</span>
+        <span className="text-accent">PAUSED</span>
       )
 
     const hints =
@@ -728,12 +728,12 @@ export const Timeline = memo(
       )
 
     return (
-      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[3px] border border-hairline bg-panel">
-        <div className="flex h-9 shrink-0 items-center gap-3 border-b border-hairline px-3 text-sm">
-          <span className="flex items-center gap-1.5 text-neutral-300">{hints}</span>
+      <div className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[3px] border border-border bg-surface">
+        <div className="flex h-9 shrink-0 items-center gap-3 border-b border-border px-3 text-sm">
+          <span className="flex items-center gap-1.5 text-fg-mid">{hints}</span>
           <span className="flex-1" />
-          <span className="text-neutral-300">{liveIndicator}</span>
-          <span className="flex overflow-hidden rounded-[3px] border border-hairline">
+          <span className="text-fg-mid">{liveIndicator}</span>
+          <span className="flex overflow-hidden rounded-[3px] border border-border">
             {modeButton('avg', '1', 'AVG')}
             {modeButton('one', '2', 'ONE')}
             {modeButton('raw', '3', 'RAW')}
@@ -750,7 +750,7 @@ export const Timeline = memo(
           />
           {tooltip && (
             <div
-              className="pointer-events-none absolute z-10 rounded-[3px] border border-hairline bg-panel-bright px-2 py-1 text-sm whitespace-nowrap text-neutral-50"
+              className="pointer-events-none absolute z-10 rounded-[3px] border border-border bg-surface-raised px-2 py-1 text-sm whitespace-nowrap text-fg"
               style={{ left: tooltip.x + 14, top: tooltip.y + 12 }}
             >
               {tooltip.text}

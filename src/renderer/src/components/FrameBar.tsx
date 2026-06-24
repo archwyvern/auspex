@@ -64,7 +64,7 @@ export const FrameBar = memo(
     }
 
     return (
-      <div className="h-14 shrink-0 rounded-[3px] border border-hairline bg-panel p-1">
+      <div className="h-14 shrink-0 rounded-[3px] border border-border bg-surface p-1">
         <canvas ref={canvasRef} className="size-full cursor-crosshair" onClick={click} />
       </div>
     )
