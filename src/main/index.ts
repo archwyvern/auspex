@@ -1,6 +1,7 @@
 import { app, BrowserWindow, ipcMain, shell } from 'electron'
 import { writeFileSync } from 'node:fs'
 import { join } from 'node:path'
+import { serveWindow } from '@carapace/shell/node'
 import { ProfilerServer } from './server'
 import { DemoRunner } from './demoRunner'
 
@@ -31,8 +32,6 @@ function createWindow(): void {
   mainWindow = window
 
   window.on('ready-to-show', () => window.show())
-  window.on('maximize', () => window.webContents.send('auspex:window-maximized', true))
-  window.on('unmaximize', () => window.webContents.send('auspex:window-maximized', false))
 
   if (autoDemo) {
     window.webContents.once('did-finish-load', () => demoRunner.start())
@@ -72,14 +71,8 @@ app.whenReady().then(() => {
   ipcMain.on('auspex:demo-run', () => demoRunner.start())
   ipcMain.on('auspex:demo-stop', () => demoRunner.stop())
 
-  // Window controls for carapace's frameless TopBar (host.window seam).
-  ipcMain.handle('auspex:window-minimize', () => mainWindow?.minimize())
-  ipcMain.handle('auspex:window-toggle-maximize', () => {
-    if (mainWindow?.isMaximized()) mainWindow.unmaximize()
-    else mainWindow?.maximize()
-  })
-  ipcMain.handle('auspex:window-close', () => mainWindow?.close())
-  ipcMain.handle('auspex:window-is-maximized', () => mainWindow?.isMaximized() ?? false)
+  // Carapace window-control seam — backs the frameless TopBar's min/max/close controls.
+  serveWindow(ipcMain, () => mainWindow)
 
   profilerServer.start()
   createWindow()

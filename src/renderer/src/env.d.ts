@@ -1,5 +1,7 @@
 /// <reference types="vite/client" />
 
+import type { WindowBridge } from '@carapace/shell/ipc'
+
 declare global {
   type AuspexServerState = {
     listening: boolean
@@ -25,12 +27,8 @@ declare global {
       runDemo: () => void
       stopDemo: () => void
       onDemoState: (callback: (state: { running: boolean }) => void) => () => void
-      windowMinimize: () => Promise<void>
-      windowToggleMaximize: () => Promise<void>
-      windowClose: () => Promise<void>
-      windowIsMaximized: () => Promise<boolean>
-      onWindowMaximized: (callback: (max: boolean) => void) => () => void
     }
+    carapaceWindow: WindowBridge
   }
 }
 

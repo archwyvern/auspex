@@ -1,18 +1,14 @@
 import type { CarapaceHost } from '@carapace/shell'
+import { createIpcWindow } from '@carapace/shell/ipc'
 
 /**
- * Auspex's implementation of carapace's host seam. Auspex is a profiler viewer, not a
- * file editor, so there is no `fs` adapter (it's optional) — only window controls over the
- * preload bridge (for the frameless TopBar), the platform clipboard, and stubbed dialogs.
+ * Auspex's implementation of carapace's host seam. Auspex is a profiler viewer, not a file
+ * editor, so there is no `fs` adapter (it's optional) — window controls come from carapace's
+ * window seam (createIpcWindow over the preload-exposed bridge), plus the platform clipboard
+ * and stubbed dialogs.
  */
 export const host: CarapaceHost = {
-  window: {
-    minimize: () => void window.auspex.windowMinimize(),
-    toggleMaximize: () => window.auspex.windowToggleMaximize(),
-    close: () => void window.auspex.windowClose(),
-    isMaximized: () => window.auspex.windowIsMaximized(),
-    onMaximizeChanged: (cb) => window.auspex.onWindowMaximized(cb),
-  },
+  window: createIpcWindow(window.carapaceWindow),
   dialog: {
     openFile: async () => null,
     saveFile: async () => null,
