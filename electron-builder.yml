@@ -1,0 +1,49 @@
+appId: com.archwyvern.auspex
+productName: Auspex
+copyright: Copyright (c) 2026 Dominic Grostate
+
+directories:
+  output: dist
+  buildResources: build
+
+# Everything the renderer needs is bundled into out/ by electron-vite, and the
+# main/preload use only Electron + Node built-ins — so the app payload is just
+# the build output plus the manifest. node_modules is excluded by omission (an
+# explicit files list is a whitelist).
+files:
+  - out/**/*
+  - package.json
+
+# A publish target makes electron-builder emit the latest*.yml update feeds the release workflow
+# collects. Packaging runs with --publish never; CI assembles the GitHub release itself.
+publish:
+  provider: github
+  owner: archwyvern
+  repo: auspex
+
+linux:
+  target:
+    - dir
+    - AppImage
+  category: Development
+  icon: build/icon.png
+  executableName: auspex
+  # Align the .desktop name + StartupWMClass with the runtime app id so the
+  # running window associates with the launcher entry on X11 (WM_CLASS) and
+  # Wayland (app_id).
+  syncDesktopName: true
+
+# Version-less filename: electron-updater can only overwrite the running AppImage in place when the
+# new file keeps its basename — a versioned name strands the .desktop launcher's Exec at the old
+# path after an update. A fixed name updates seamlessly.
+appImage:
+  artifactName: ${productName}.${ext}
+
+win:
+  target:
+    - nsis
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  perMachine: false

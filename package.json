@@ -4,6 +4,8 @@
   "description": "Realtime frame profiler — in-process SDK streaming to an out-of-process viewer",
   "author": "Archwyvern <archwyvern@archwyvern.com>",
   "license": "MIT",
+  "packageManager": "pnpm@10.33.4",
+  "desktopName": "auspex.desktop",
   "main": "./out/main/index.js",
   "scripts": {
     "dev": "electron-vite dev",
@@ -19,6 +21,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^5.2.0",
     "electron": "^42.3.3",
+    "electron-builder": "^26.15.2",
     "electron-vite": "^5.0.0",
     "tailwindcss": "^4.3.0",
     "tsx": "^4.22.4",
